@@ -42,8 +42,46 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # The ubuntu runner image ships the Android SDK preinstalled, but not
+      # always the exact platforms/build-tools Capacitor's compileSdk needs.
+      # android-actions/setup-android has been unreliable here (it can fail
+      # while relocating an SDK that is already present), so verify and top up
+      # the preinstalled SDK directly instead.
+      - name: Verify Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK" ] || [ ! -d "$SDK" ]; then
+            echo "::error::No Android SDK found on this runner (ANDROID_HOME=${ANDROID_HOME:-unset})"
+            exit 1
+          fi
+          echo "SDK root: $SDK"
+          ls "$SDK"
+
+          SDKM=$(command -v sdkmanager || find "$SDK" -name sdkmanager -type f 2>/dev/null | sort -V | tail -1)
+          if [ -n "$SDKM" ]; then
+            echo "sdkmanager: $SDKM"
+            yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+            # Only install what is missing: compileSdk 34 + a matching build-tools.
+            if [ ! -d "$SDK/platforms/android-34" ]; then
+              echo "installing platforms;android-34"
+              "$SDKM" --install "platforms;android-34" || true
+            fi
+            if ! ls "$SDK/build-tools" | grep -qE '^34\.'; then
+              echo "installing build-tools;34.0.0"
+              "$SDKM" --install "build-tools;34.0.0" || true
+            fi
+          else
+            echo "::warning::sdkmanager not found; relying on the preinstalled SDK"
+          fi
+
+          echo "--- platforms ---"; ls "$SDK/platforms" 2>/dev/null || true
+          echo "--- build-tools ---"; ls "$SDK/build-tools" 2>/dev/null || true
+          echo "--- platform-tools ---"; ls "$SDK/platform-tools" 2>/dev/null | head -3 || true
+
+          [ -d "$SDK/platforms/android-34" ] || { echo "::error::platforms;android-34 missing"; exit 1; }
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: npm ci || npm install
