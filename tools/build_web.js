@@ -6,8 +6,9 @@
  *   - copies the game source (html/css/js/fonts/assets)
  *   - verifies every referenced asset actually exists (fails the build)
  *   - writes a build stamp + an asset manifest for cache busting
- *   - when --android is passed, also stages the Android resource overlay
- *     (icons, splash, colors/strings) into www/android/ for tools/sync_android.js
+ * The Android resource overlay (game/android/res) is NOT copied here: it is
+ * native-only and tools/sync_android.js reads it directly, so the APK doesn't
+ * carry a second copy inside assets/public.
  *
  * This is what CI runs before `npx cap sync android`.
  */
@@ -57,7 +58,7 @@ function walk(dir, acc = []) {
 }
 
 function main() {
-  const withAndroid = process.argv.includes("--android");
+
   console.log("Pixel Arena Idle — web build");
 
   rmrf(OUT);
@@ -73,7 +74,6 @@ function main() {
     return true;
   };
   copyDirFiltered(SRC, OUT, skipFilter);
-  if (withAndroid) copyDir(path.join(SRC, "android"), path.join(OUT, "android"));
   console.log("  copied game/ -> www/");
 
   // ---- verify referenced assets

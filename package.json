@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "node tools/serve.js",
     "assets": "python3 tools/build_assets.py",
-    "build:web": "node tools/build_web.js --android",
-    "build:android": "node tools/build_web.js --android && node tools/sync_android.js",
+    "build:web": "node tools/build_web.js",
+    "build:android": "node tools/build_web.js && node tools/sync_android.js",
     "apk": "npm run build:android && cd android && ./gradlew assembleDebug",
-    "test": "node tools/harness.js",
-    "test:all": "node tools/harness.js --all"
+    "test": "node tools/simtest.js && node tools/harness.js",
+    "test:logic": "node tools/simtest.js",
+    "test:render": "node tools/harness.js"
   },
   "devDependencies": {
     "@capacitor/android": "^6.2.0",

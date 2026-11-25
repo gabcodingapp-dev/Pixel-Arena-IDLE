@@ -312,7 +312,11 @@ def build_splash() -> None:
     ):
         d = ANDROID_RES / folder
         d.mkdir(parents=True, exist_ok=True)
-        crop_to(size).save(d / "splash.png", optimize=True)
+        art = crop_to(size)
+        # Pixel art survives aggressive palette quantisation, and a splash that
+        # loads instantly matters more than a few gradient steps.
+        quantised = art.convert("P", palette=Image.ADAPTIVE, colors=192)
+        quantised.save(d / "splash.png", optimize=True)
     print("  splash drawable + drawable-land")
 
 

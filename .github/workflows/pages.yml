@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies and test
         run: |
           npm ci || npm install
-          node tools/simtest.js
+          npm run test:logic
 
       - name: Build static bundle
         run: |

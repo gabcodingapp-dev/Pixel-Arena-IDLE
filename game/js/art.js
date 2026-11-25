@@ -19,9 +19,6 @@
   A.ready = false;
 
   A.SPRITES = ["rowan", "luna", "nixie", "fox", "slime", "mimic", "boss"];
-  A.BGS = {
-    farm_land: "assets/sprites/../raw/../ui/title_land", // replaced below
-  };
 
   /* Sprite files live next to the atlas; the build pipeline emits webp. */
   function assetUrl(base, ext) {
@@ -54,11 +51,14 @@
     });
   }
 
+  /* Optional scene art. Anything missing falls back to the procedural
+     painter, so a half-finished art set never breaks the game. To upgrade a
+     scene, drop a matching JPEG/PNG in game/assets/raw (farm_land,
+     battle_land, battle_port, farm_port) and re-run tools/build_assets.py. */
   A.BG_FILES = {
-    title_port: "assets/ui/title_port",
-    title_land: "assets/ui/title_land",
+    title_port: "assets/scene/title_port",
+    title_land: "assets/scene/title_land",
     farm_land: "assets/scene/farm_land",
-    farm_port: "assets/scene/farm_port",
     battle_land: "assets/scene/battle_land",
     battle_port: "assets/scene/battle_port"
   };
@@ -439,7 +439,7 @@
      grass. That keeps the hand-drawn detail while guaranteeing the lower half
      of the screen is a clean, empty field for the player's plots. */
   function paintFarm(ctx, W, H, landscape) {
-    var bg = A.bgs[landscape ? "farm_land" : "farm_port"];
+    var bg = A.bgs.farm_land;
     var haveArt = !!bg;
 
     // Landscape lets the art cover the full canvas; portrait crops it to a
@@ -523,7 +523,7 @@
      procedural version stands on its own if no art is available.
      ------------------------------------------------------------ */
   function paintBattle(ctx, W, H, landscape) {
-    var bg = A.bgs[landscape ? "battle_land" : "battle_port"];
+    var bg = A.bgs[landscape ? "battle_land" : "battle_port"] || A.bgs.battle_land;
     var floorY = Math.round(H * A.battleFloorFrac(landscape));
     var rnd = U.seeded(5150);
 

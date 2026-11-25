@@ -52,10 +52,10 @@ jobs:
           python tools/build_assets.py
 
       - name: Game logic tests
-        run: node tools/simtest.js
+        run: npm run test:logic
 
       - name: Headless render smoke test
-        run: node tools/harness.js
+        run: npm run test:render
 
       - name: Upload screenshots
         if: always()

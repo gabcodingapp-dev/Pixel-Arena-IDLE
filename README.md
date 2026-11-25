@@ -56,7 +56,8 @@ Requires **JDK 21** and the **Android SDK** (`ANDROID_HOME` set).
 ```bash
 npm install
 python3 tools/build_assets.py     # regenerate sprites/icons from source art
-node tools/build_web.js --android # assemble www/
+                                  # (needs pillow, numpy, scipy)
+node tools/build_web.js           # assemble www/
 node tools/sync_android.js        # generate ./android + overlay the native shell
 
 cd android
@@ -163,9 +164,9 @@ game, drives the main loop, exercises every panel and action, and exports PNG
 frames for both orientations — genuine regression coverage for a canvas game.
 
 ```bash
-npm install --no-save jsdom @napi-rs/canvas
-node tools/harness.js            # portrait
-node tools/harness.js --all      # all three viewports
+npm test                  # logic suite + render smoke test
+npm run test:logic        # 113 assertions, no DOM needed
+npm run test:render       # boots the game headlessly, exports screenshots
 ```
 
 Screenshots land in `.harness/`.
