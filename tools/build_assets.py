@@ -349,6 +349,13 @@ def write_android_overlay(index: dict) -> None:
         '    <color name="brand_leaf">#5FBF3F</color>\n'
         "</resources>\n"
     )
+    (ANDROID_RES / "values" / "ic_launcher_background.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<resources>\n"
+        "    <!-- Brand backdrop behind the adaptive launcher icon. -->\n"
+        '    <color name="ic_launcher_background">#201812</color>\n'
+        "</resources>\n"
+    )
     (ANDROID_RES / "values" / "strings.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         "<resources>\n"

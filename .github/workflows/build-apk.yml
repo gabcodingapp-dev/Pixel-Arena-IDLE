@@ -66,10 +66,10 @@ jobs:
           if-no-files-found: ignore
 
       - name: Build web bundle
-        run: node tools/build_web.js --android
+        run: npm run build:web
 
       - name: Generate Android project
-        run: node tools/sync_android.js
+        run: npm run build:android
 
       - name: Prepare signing key (optional)
         id: signing

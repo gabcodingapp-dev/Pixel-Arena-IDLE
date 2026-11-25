@@ -162,8 +162,8 @@
      ASCENSION - permanent multipliers bought with Essence
      ------------------------------------------------------------ */
   D.ASCEND = [
-    { id: "might", name: "Heroic Might", icon: "⚔️", base: 8, curve: 1.35, per: 0.12, desc: "+12% hero damage per rank" },
-    { id: "harvest", name: "Bountiful Harvest", icon: "🌾", base: 10, curve: 1.35, per: 0.10, desc: "+10% gold income per rank" },
+    { id: "might", name: "Heroic Might", icon: "⚔️", base: 8, curve: 1.35, per: 0.12, desc: "+12% hero attack &amp; healing per rank" },
+    { id: "harvest", name: "Bountiful Harvest", icon: "🌾", base: 10, curve: 1.35, per: 0.10, desc: "+10% farm income per rank" },
     { id: "vigor", name: "Iron Vigor", icon: "🛡️", base: 12, curve: 1.4, per: 0.10, desc: "+10% hero HP per rank" },
     { id: "luck", name: "Lucky Clover", icon: "🍀", base: 15, curve: 1.45, per: 0.02, desc: "+2% crit chance per rank" }
   ];

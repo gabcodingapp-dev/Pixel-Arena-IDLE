@@ -441,8 +441,8 @@
       '<div class="stat-grid">' +
         "<div>Essence gained<b>" + gain + "</b></div>" +
         "<div>Team slots next run<b>" + Math.min(D.BAL.maxTeam, 1 + PA.S.rebirths + 1) + "</b></div>" +
-        "<div>Farm rates<b>+10%/rank</b></div>" +
-        "<div>Hero stars<b>+1 per hero</b></div>" +
+        "<div>Next team slot<b>" + Math.min(D.BAL.maxTeam, 2 + PA.S.rebirths + 1) + " heroes</b></div>" +
+        "<div>Hero stars<b>+1 per eligible hero</b></div>" +
       "</div>" +
       "<p style=\"font-size:11px\">Keeps: heroes, levels, ascension ranks, quest progress.<br>" +
       "Resets: gold, farm, stage progress.</p>" +
