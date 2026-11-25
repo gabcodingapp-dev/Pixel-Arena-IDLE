@@ -122,6 +122,8 @@ jobs:
           # Resolves secrets -> keystore.properties -> generated key, verifies
           # the result with keytool, and exports KEYSTORE_* for Gradle.
           bash tools/ci_signing.sh
+          echo "source=$SIGNING_SOURCE" >> "$GITHUB_OUTPUT"
+          echo "Signing source: $SIGNING_SOURCE"
 
       - name: Build APK + AAB
         run: |
@@ -138,15 +140,55 @@ jobs:
           find android/app/build/outputs -name "*.aab" -exec cp {} out/ \;
           ls -la out
 
-          # Fail loudly if the release APK came out unsigned.
-          APP_APK=$(ls out/app-release*.apk 2>/dev/null | head -1 || true)
-          if [ -z "$APP_APK" ]; then echo "no release APK produced"; exit 1; fi
-          echo "--- apksigner verify $APP_APK ---"
+          APP_APK=$(ls out/*release*.apk 2>/dev/null | head -1 || true)
+          if [ -z "$APP_APK" ]; then echo "::error::no release APK produced"; exit 1; fi
+          echo "verifying $APP_APK"
+
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
-          "$APKSIGNER" verify --verbose --print-certs "$APP_APK"
-          echo "--- badging ---"
           AAPT2=$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -1)
-          "$AAPT2" dump badging "$APP_APK" | head -12 || true
+
+          set +e
+          "$APKSIGNER" verify --verbose --print-certs "$APP_APK" > apksigner.txt 2>&1
+          SIGN_RC=$?
+          "$AAPT2" dump badging "$APP_APK" > badging.txt 2>&1
+          set -e
+
+          echo "----- apksigner -----"; cat apksigner.txt
+          echo "----- badging -----"; head -12 badging.txt
+
+          if [ $SIGN_RC -ne 0 ]; then
+            echo "::error::apksigner rejected the APK (exit $SIGN_RC)"
+            exit 1
+          fi
+          grep -q "Verified using v1 scheme" apksigner.txt || echo "::warning::v1 (JAR) signing not reported"
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" apksigner.txt \
+            || { echo "::error::APK is not v2-signed"; exit 1; }
+
+          # Fingerprint of the certificate that actually signed the APK, so it
+          # can be compared against the release keystore.
+          FP=$(grep -m1 "certificate SHA-256 digest" apksigner.txt | sed 's/.*digest: //')
+          SIZE=$(stat -c%s "$APP_APK")
+          VER=$(grep -m1 "^package:" badging.txt | sed -E "s/.*versionName='([^']*)'.*/\1/")
+          VCODE=$(grep -m1 "^package:" badging.txt | sed -E "s/.*versionCode='([^']*)'.*/\1/")
+
+          {
+            echo "## Pixel Arena Idle — APK verified"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| File | \`$(basename "$APP_APK")\` |"
+            echo "| Size | $((SIZE / 1024)) KB |"
+            echo "| Version | $VER (code $VCODE) |"
+            echo "| Signing cert SHA-256 | \`$FP\` |"
+            echo "| v1 / v2 signature | verified |"
+            echo "| Signing source | `${{ steps.signing.outputs.source }}` |"
+            echo ""
+            echo "\`\`\`"
+            cat apksigner.txt
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          cp apksigner.txt badging.txt out/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -66,6 +66,7 @@ export_vars() {
   echo "KEYSTORE_PASSWORD=$STORE_PW"
   echo "KEY_ALIAS=$ALIAS"
   echo "KEY_PASSWORD=$KEY_PW"
+  echo "SIGNING_SOURCE=$SOURCE"
 }
 if [ -n "${GITHUB_ENV:-}" ]; then
   export_vars >> "$GITHUB_ENV"
