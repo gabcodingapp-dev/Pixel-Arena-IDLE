@@ -159,8 +159,15 @@ jobs:
           "$AAPT2" dump badging "$APP_APK" > badging.txt 2>&1
           set -e
 
-          echo "----- apksigner -----"; cat apksigner.txt
-          echo "----- badging -----"; head -12 badging.txt
+          echo "----- apksigner -----"
+          # Echo inside a log group so the proof lands in the build log, which
+          # is readable even where release assets are not.
+          echo "::group::apksigner verify --print-certs"
+          cat apksigner.txt
+          echo "::endgroup::"
+          echo "::group::aapt2 badging"
+          head -12 badging.txt
+          echo "::endgroup::"
 
           if [ $SIGN_RC -ne 0 ]; then
             echo "::error::apksigner rejected the APK (exit $SIGN_RC)"
@@ -185,6 +192,7 @@ jobs:
             exit 1
           fi
           echo "signing: APK certificate matches release.jks"
+          echo "::notice title=APK signed ::${FP_NORM} (matches release.jks)"
 
           SIZE=$(stat -c%s "$APP_APK")
           VER=$(grep -m1 "^package:" badging.txt | sed -E "s/.*versionName='([^']*)'.*/\1/")
