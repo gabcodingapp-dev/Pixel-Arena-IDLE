@@ -1,0 +1,272 @@
+name: Build APK
+
+# Builds a signed-when-possible Android APK/AAB on every push.
+# Artifacts are attached to the workflow run; tagged pushes also create a
+# GitHub Release with the APK attached so players can sideload it.
+on:
+  push:
+    branches: [main, "arena/**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+# The repository's default token is read-only, so the release-publishing step
+# has to ask for write access explicitly. Everything else only needs read.
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    name: Android build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Gradle 8.2.1 (Capacitor 6's wrapper) does not support JDK 21, and
+      # AGP 8.2 targets Java 17. 17 is the one version that satisfies both.
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Python (asset pipeline)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The ubuntu runner image ships the Android SDK preinstalled, but not
+      # always the exact platforms/build-tools Capacitor's compileSdk needs.
+      # android-actions/setup-android has been unreliable here (it can fail
+      # while relocating an SDK that is already present), so verify and top up
+      # the preinstalled SDK directly instead.
+      - name: Verify Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK" ] || [ ! -d "$SDK" ]; then
+            echo "::error::No Android SDK found on this runner (ANDROID_HOME=${ANDROID_HOME:-unset})"
+            exit 1
+          fi
+          echo "SDK root: $SDK"
+          ls "$SDK"
+
+          SDKM=$(command -v sdkmanager || find "$SDK" -name sdkmanager -type f 2>/dev/null | sort -V | tail -1)
+          if [ -n "$SDKM" ]; then
+            echo "sdkmanager: $SDKM"
+            yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+            # Only install what is missing: compileSdk 34 + a matching build-tools.
+            if [ ! -d "$SDK/platforms/android-34" ]; then
+              echo "installing platforms;android-34"
+              "$SDKM" --install "platforms;android-34" || true
+            fi
+            if ! ls "$SDK/build-tools" | grep -qE '^34\.'; then
+              echo "installing build-tools;34.0.0"
+              "$SDKM" --install "build-tools;34.0.0" || true
+            fi
+          else
+            echo "::warning::sdkmanager not found; relying on the preinstalled SDK"
+          fi
+
+          echo "--- platforms ---"; ls "$SDK/platforms" 2>/dev/null || true
+          echo "--- build-tools ---"; ls "$SDK/build-tools" 2>/dev/null || true
+          echo "--- platform-tools ---"; ls "$SDK/platform-tools" 2>/dev/null | head -3 || true
+
+          [ -d "$SDK/platforms/android-34" ] || { echo "::error::platforms;android-34 missing"; exit 1; }
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Rebuild art assets
+        run: |
+          python -m pip install --quiet pillow numpy scipy
+          python tools/build_assets.py
+
+      - name: Game logic tests
+        run: npm run test:logic
+
+      - name: Headless render smoke test
+        run: npm run test:render
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: .harness/*.png
+          if-no-files-found: ignore
+
+      - name: Build web bundle
+        run: npm run build:web
+
+      - name: Generate Android project
+        run: npm run build:android
+
+      - name: Prepare signing key
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          # Resolves secrets -> keystore.properties -> generated key, verifies
+          # the result with keytool, and exports KEYSTORE_* for Gradle.
+          bash tools/ci_signing.sh
+          echo "source=$SIGNING_SOURCE" >> "$GITHUB_OUTPUT"
+          echo "Signing source: $SIGNING_SOURCE"
+
+      - name: Build APK + AAB
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
+
+
+      - name: Collect and verify artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          find android/app/build/outputs -name "*.apk" -exec cp {} out/ \;
+          find android/app/build/outputs -name "*.aab" -exec cp {} out/ \;
+          ls -la out
+
+          APP_APK=$(ls out/*release*.apk 2>/dev/null | head -1 || true)
+          if [ -z "$APP_APK" ]; then echo "::error::no release APK produced"; exit 1; fi
+          echo "verifying $APP_APK"
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          AAPT2=$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -1)
+
+          set +e
+          "$APKSIGNER" verify --verbose --print-certs "$APP_APK" > apksigner.txt 2>&1
+          SIGN_RC=$?
+          "$AAPT2" dump badging "$APP_APK" > badging.txt 2>&1
+          set -e
+
+          echo "----- apksigner -----"
+          # Echo inside a log group so the proof lands in the build log, which
+          # is readable even where release assets are not.
+          echo "::group::apksigner verify --print-certs"
+          cat apksigner.txt
+          echo "::endgroup::"
+          echo "::group::aapt2 badging"
+          head -12 badging.txt
+          echo "::endgroup::"
+
+          if [ $SIGN_RC -ne 0 ]; then
+            echo "::error::apksigner rejected the APK (exit $SIGN_RC)"
+            exit 1
+          fi
+          grep -q "Verified using v1 scheme" apksigner.txt || echo "::warning::v1 (JAR) signing not reported"
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" apksigner.txt \
+            || { echo "::error::APK is not v2-signed"; exit 1; }
+
+          # Fingerprint of the certificate that actually signed the APK, so it
+          # can be compared against the release keystore.
+          FP=$(grep -m1 "certificate SHA-256 digest" apksigner.txt | sed 's/.*digest: //')
+          FP_NORM=$(echo "$FP" | tr -d ':' | tr 'a-f' 'A-F')
+
+          # The APK must carry the certificate we think it does. If Gradle
+          # silently fell back to the debug key, this catches it.
+          EXPECTED=$(node tools/keystore_fingerprint.js)
+          echo "APK cert:      $FP_NORM"
+          echo "Keystore cert: $EXPECTED"
+          if [ "$FP_NORM" != "$EXPECTED" ]; then
+            echo "::error::APK is signed by a different certificate than release.jks"
+            exit 1
+          fi
+          echo "signing: APK certificate matches release.jks"
+          echo "::notice title=APK signed ::${FP_NORM} (matches release.jks)"
+
+          SIZE=$(stat -c%s "$APP_APK")
+          VER=$(grep -m1 "^package:" badging.txt | sed -E "s/.*versionName='([^']*)'.*/\1/")
+          VCODE=$(grep -m1 "^package:" badging.txt | sed -E "s/.*versionCode='([^']*)'.*/\1/")
+
+          {
+            echo "## Pixel Arena Idle — APK verified"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| File | \`$(basename "$APP_APK")\` |"
+            echo "| Size | $((SIZE / 1024)) KB |"
+            echo "| Version | $VER (code $VCODE) |"
+            echo "| Signing cert SHA-256 | \`$FP\` |"
+            echo "| v1 / v2 signature | verified |"
+            echo "| Signing source | `${{ steps.signing.outputs.source }}` |"
+            echo ""
+            echo "\`\`\`"
+            cat apksigner.txt
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          cp apksigner.txt badging.txt out/
+
+          # Publish the proof where it is readable without downloading
+          # anything: the release body itself.
+          {
+            echo "RELEASE_PROOF<<PROOF_EOF"
+            echo ""
+            echo "### Signed build"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| APK | \`$(basename "$APP_APK")\` ($((SIZE / 1024)) KB) |"
+            echo "| Version | $VER (code $VCODE) |"
+            echo "| Certificate SHA-256 | \`$FP_NORM\` |"
+            echo "| Matches release.jks | yes |"
+            echo ""
+            echo "\`\`\`"
+            cat apksigner.txt
+            echo "\`\`\`"
+            echo "PROOF_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-arena-idle-apk
+          path: out/*
+          if-no-files-found: error
+
+      # The shared workflow token cannot create releases on a repo whose
+      # default permissions are read-only, so the one step that needs to write
+      # uses the maintainer's token when it is available.
+      - name: Check release token
+        id: token
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          REL_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -n "$REL_TOKEN" ]; then
+            echo "using maintainer token for the release"
+            echo "token=$REL_TOKEN" >> "$GITHUB_OUTPUT"
+          else
+            echo "no RELEASE_TOKEN secret; release will use the default token"
+            echo "token=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true
+          append_body: true
+          body: ${{ env.RELEASE_PROOF }}
+          token: ${{ steps.token.outputs.token || github.token }}

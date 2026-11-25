@@ -1,0 +1,106 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "com.pixelarena.idle"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.pixelarena.idle"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Versioning is rewritten from package.json by tools/sync_android.js
+        versionCode(project.findProperty("pixelArenaVersionCode") ?: 1 as Integer)
+        versionName(project.findProperty("pixelArenaVersionName") ?: (pkg.version ?: "1.0.0"))
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    // ------------------------------------------------------------------
+    // Release signing
+    //
+    // Credentials are looked for in three places, in order:
+    //   1. CI: environment variables (KEYSTORE_PATH / KEYSTORE_PASSWORD /
+    //      KEY_ALIAS / KEY_PASSWORD), injected from repository secrets.
+    //   2. Local: keystore.properties next to the keystore, written by
+    //      tools/gen_keystore.js. Never committed (see .gitignore).
+    //   3. Neither: fall back to the debug key so `assembleRelease` still
+    //      produces something installable for testers.
+    // ------------------------------------------------------------------
+    def keystoreProps = new Properties()
+    def keystorePropsFile = rootProject.file("../keystore.properties")
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.withInputStream { keystoreProps.load(it) }
+    }
+
+    def signingStorePath = System.getenv("KEYSTORE_PATH") ?: keystoreProps.getProperty("storeFile")
+    if (signingStorePath && !new File(signingStorePath).isAbsolute()) {
+        signingStorePath = rootProject.file("../" + signingStorePath).absolutePath
+    }
+    def signingStorePassword = System.getenv("KEYSTORE_PASSWORD") ?: keystoreProps.getProperty("storePassword")
+    def signingKeyAlias = System.getenv("KEY_ALIAS") ?: keystoreProps.getProperty("keyAlias")
+    def signingKeyPassword = System.getenv("KEY_PASSWORD") ?: keystoreProps.getProperty("keyPassword")
+
+    def hasReleaseKey = signingStorePath && new File(signingStorePath).exists() &&
+                        signingStorePassword && signingKeyAlias
+
+    signingConfigs {
+        release {
+            if (hasReleaseKey) {
+                storeFile new File(signingStorePath)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+                // v1 + v2 + v3: v1 keeps Android 5/6 (minSdk 22) happy.
+                enableV1Signing true
+                enableV2Signing true
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseKey) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
