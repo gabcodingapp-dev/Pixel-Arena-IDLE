@@ -113,45 +113,15 @@ jobs:
 
       - name: Prepare signing key
         id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          set -euo pipefail
-          KS_PATH="release.jks"
-
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "Using the keystore from repository secrets."
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$KS_PATH"
-            STORE_PW="${{ secrets.KEYSTORE_PASSWORD }}"
-            ALIAS="${{ secrets.KEY_ALIAS }}"
-            KEY_PW="${{ secrets.KEY_PASSWORD }}"
-            echo "signed=true" >> "$GITHUB_OUTPUT"
-          elif [ -f keystore.properties ]; then
-            echo "Using the committed keystore.properties (dev signing)."
-            echo "signed=true" >> "$GITHUB_OUTPUT"
-          else
-            # Deterministic fallback: generate a throwaway signing identity so
-            # the release artifact is a real, installed-able build.
-            echo "No secrets found — generating a project signing key."
-            node tools/gen_keystore.js --quiet --force --out "$KS_PATH"
-            STORE_PW=$(grep '^storePassword=' keystore.properties | cut -d= -f2)
-            ALIAS=$(grep '^keyAlias=' keystore.properties | cut -d= -f2)
-            KEY_PW=$(grep '^keyPassword=' keystore.properties | cut -d= -f2)
-            echo "signed=true" >> "$GITHUB_OUTPUT"
-            echo "signing-note=Generated key (not for Play upload)" >> "$GITHUB_OUTPUT"
-          fi
-
-          # Hand the credentials to Gradle through the environment.
-          {
-            echo "KEYSTORE_PATH=$PWD/$KS_PATH"
-            echo "KEYSTORE_PASSWORD=$STORE_PW"
-            echo "KEY_ALIAS=$ALIAS"
-            echo "KEY_PASSWORD=$KEY_PW"
-          } >> "$GITHUB_ENV"
-
-          # Prove the key is loadable before spending 5 minutes on Gradle.
-          echo "Verifying the signing key with apksigner's own crypto stack..."
-          keytool -list -keystore "$KS_PATH" -storepass "$STORE_PW" -alias "$ALIAS" \
-            -storetype PKCS12 | tee /tmp/keytool.txt
-          grep -q "PrivateKeyEntry" /tmp/keytool.txt
+          # Resolves secrets -> keystore.properties -> generated key, verifies
+          # the result with keytool, and exports KEYSTORE_* for Gradle.
+          bash tools/ci_signing.sh
 
       - name: Build APK + AAB
         run: |
