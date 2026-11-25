@@ -217,6 +217,26 @@ jobs:
 
           cp apksigner.txt badging.txt out/
 
+          # Publish the proof where it is readable without downloading
+          # anything: the release body itself.
+          {
+            echo "RELEASE_PROOF<<PROOF_EOF"
+            echo ""
+            echo "### Signed build"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| APK | \`$(basename "$APP_APK")\` ($((SIZE / 1024)) KB) |"
+            echo "| Version | $VER (code $VCODE) |"
+            echo "| Certificate SHA-256 | \`$FP_NORM\` |"
+            echo "| Matches release.jks | yes |"
+            echo ""
+            echo "\`\`\`"
+            cat apksigner.txt
+            echo "\`\`\`"
+            echo "PROOF_EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -247,4 +267,6 @@ jobs:
         with:
           files: out/*
           generate_release_notes: true
+          append_body: true
+          body: ${{ env.RELEASE_PROOF }}
           token: ${{ steps.token.outputs.token || github.token }}
