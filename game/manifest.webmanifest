@@ -1,0 +1,16 @@
+{
+  "name": "Pixel Arena Idle",
+  "short_name": "Pixel Arena",
+  "description": "A cozy pixel-art idle RPG. Deploy heroes, expand territory, hoard gold.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#201812",
+  "theme_color": "#241a12",
+  "categories": ["games"],
+  "icons": [
+    { "src": "assets/ui/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/ui/icon.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }
+  ]
+}

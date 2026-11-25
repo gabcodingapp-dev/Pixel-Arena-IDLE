@@ -1,0 +1,52 @@
+{
+  "sprites": {
+    "rowan": {
+      "w": 173,
+      "h": 128,
+      "src": "assets/sprites/rowan.webp"
+    },
+    "luna": {
+      "w": 173,
+      "h": 128,
+      "src": "assets/sprites/luna.webp"
+    },
+    "nixie": {
+      "w": 172,
+      "h": 128,
+      "src": "assets/sprites/nixie.webp"
+    },
+    "fox": {
+      "w": 166,
+      "h": 112,
+      "src": "assets/sprites/fox.webp"
+    },
+    "slime": {
+      "w": 161,
+      "h": 104,
+      "src": "assets/sprites/slime.webp"
+    },
+    "boss": {
+      "w": 266,
+      "h": 176,
+      "src": "assets/sprites/boss.webp"
+    },
+    "mimic": {
+      "w": 169,
+      "h": 116,
+      "src": "assets/sprites/mimic.webp"
+    }
+  },
+  "ui": {
+    "title_land": {
+      "w": 1600,
+      "h": 900,
+      "src": "assets/scene/title_land.webp"
+    },
+    "title_port": {
+      "w": 900,
+      "h": 1600,
+      "src": "assets/scene/title_port.webp"
+    }
+  },
+  "atlasVersion": 1
+}

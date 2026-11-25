@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#241a12" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="description" content="Pixel Arena Idle - a cozy pixel-art idle RPG. Deploy heroes, expand your territory, hoard gold." />
+<title>Pixel Arena Idle</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="assets/ui/icon.png" />
+<link rel="apple-touch-icon" href="assets/ui/icon.png" />
+<link rel="preload" as="image" href="assets/scene/title_port.webp" media="(orientation: portrait)" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="orient-portrait is-booting">
+
+<!-- ============================ BOOT ============================ -->
+<div id="boot" class="boot">
+  <div class="boot-art"></div>
+  <div class="boot-inner">
+    <h1 class="boot-logo"><span>Pixel</span><span>Arena</span><em>Idle</em></h1>
+    <p class="boot-tag">Deploy heroes &middot; Expand territory</p>
+    <div class="boot-bar"><i id="bootFill"></i></div>
+    <p class="boot-status" id="bootStatus">Warming up the forge...</p>
+    <button id="bootStart" class="btn btn-primary boot-start" hidden>Tap to Play</button>
+  </div>
+</div>
+
+<!-- ============================ APP ============================ -->
+<div id="app">
+
+  <!-- HUD -->
+  <header id="hud">
+    <div class="hud-left">
+      <div class="avatar-chip" id="playerChip">
+        <img id="playerAvatar" src="assets/sprites/rowan.webp" alt="" />
+        <div class="avatar-meta">
+          <b id="playerName">Trailblazer</b>
+          <small id="playerStage">Stage 1-1</small>
+        </div>
+      </div>
+    </div>
+    <div class="hud-right">
+      <div class="res" data-res="gold" title="Gold">
+        <i class="ico ico-coin"></i><span id="resGold">0</span>
+        <em id="resIncome">+0/s</em>
+      </div>
+      <div class="res" data-res="gem" title="Essence">
+        <i class="ico ico-gem"></i><span id="resGem">0</span>
+      </div>
+      <div class="res" data-res="shard" title="Star Shards">
+        <i class="ico ico-shard"></i><span id="resShard">0</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- SCENE -->
+  <main id="stage">
+    <canvas id="scene"></canvas>
+    <div id="sceneOverlay">
+      <div class="stage-tracker" id="stageTracker">
+        <div class="st-name" id="stageName">Greenfield Path</div>
+        <div class="st-bar"><i id="stageFill"></i></div>
+        <div class="st-sub" id="stageSub">Wave 1 / 5</div>
+      </div>
+      <div class="overlay-btns">
+        <button class="round-btn" id="btnAuto" title="Auto battle">
+          <span class="rb-on">AUTO</span><span class="rb-off">OFF</span>
+        </button>
+        <button class="round-btn" id="btnSpeed" title="Battle speed"><span id="speedLabel">x1</span></button>
+      </div>
+    </div>
+    <div id="tapLayer"></div>
+    <div id="floaters"></div>
+  </main>
+
+  <!-- ACTION BAR -->
+  <footer id="actionbar">
+    <button class="dock-btn" data-scene="farm" id="btnFarm">
+      <span class="db-ico">&#9961;</span><span class="db-lbl">Farm</span>
+    </button>
+    <button class="dock-btn" data-scene="battle" id="btnBattle">
+      <span class="db-ico">&#9876;</span><span class="db-lbl">Battle</span>
+    </button>
+    <div class="ab-spacer"></div>
+    <button class="btn btn-ghost btn-sm" id="btnPrestige">Rebirth</button>
+    <button class="btn btn-ghost btn-sm" id="btnMenu">&#9776;</button>
+  </footer>
+
+  <!-- DOCK / SIDE PANEL -->
+  <aside id="dock">
+    <nav id="tabs">
+      <button class="tab is-active" data-tab="team"><span>&#9823;</span>Team</button>
+      <button class="tab" data-tab="heroes"><span>&#10024;</span>Heroes</button>
+      <button class="tab" data-tab="shop"><span>&#9965;</span>Farm</button>
+      <button class="tab" data-tab="quests"><span>&#128220;</span>Quests</button>
+    </nav>
+    <div id="panel" class="panel-scroll"></div>
+  </aside>
+
+</div>
+
+<div id="toasts"></div>
+<div id="modalRoot"></div>
+
+<script src="js/core.js"></script>
+<script src="js/art.js"></script>
+<script src="js/data.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/state.js"></script>
+<script src="js/farm.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "pixel-arena-idle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cozy pixel-art idle RPG \u2014 deploy heroes, expand territory, hoard gold.",
+  "scripts": {
+    "dev": "node tools/serve.js",
+    "assets": "python3 tools/build_assets.py",
+    "build:web": "node tools/build_web.js --android",
+    "build:android": "node tools/build_web.js --android && node tools/sync_android.js",
+    "apk": "npm run build:android && cd android && ./gradlew assembleDebug",
+    "test": "node tools/harness.js",
+    "test:all": "node tools/harness.js --all"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/core": "^6.2.0"
+  }
+}

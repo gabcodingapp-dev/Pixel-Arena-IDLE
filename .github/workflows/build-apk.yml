@@ -1,0 +1,115 @@
+name: Build APK
+
+# Builds a signed-when-possible Android APK/AAB on every push.
+# Artifacts are attached to the workflow run; tagged pushes also create a
+# GitHub Release with the APK attached so players can sideload it.
+on:
+  push:
+    branches: [main, "arena/**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Android build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Python (asset pipeline)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Rebuild art assets
+        run: |
+          python -m pip install --quiet pillow numpy scipy
+          python tools/build_assets.py
+
+      - name: Headless game smoke test
+        run: |
+          npm install --no-save jsdom @napi-rs/canvas
+          node tools/harness.js
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: .harness/*.png
+          if-no-files-found: ignore
+
+      - name: Build web bundle
+        run: node tools/build_web.js --android
+
+      - name: Generate Android project
+        run: node tools/sync_android.js
+
+      - name: Prepare signing key (optional)
+        id: signing
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Signing key present — release will be signed for distribution."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No signing key — release APK will use the debug key (still installable)."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build APK + AAB
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          find android/app/build/outputs -name "*.apk" -exec cp {} out/ \;
+          find android/app/build/outputs -name "*.aab" -exec cp {} out/ \;
+          ls -la out
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-arena-idle-apk
+          path: out/*
+          if-no-files-found: error
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true

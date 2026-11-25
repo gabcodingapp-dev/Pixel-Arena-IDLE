@@ -1,0 +1,14 @@
+{
+  "appId": "com.pixelarena.idle",
+  "appName": "Pixel Arena Idle",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#201812",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
