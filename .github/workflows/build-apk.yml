@@ -14,6 +14,12 @@ concurrency:
   group: apk-${{ github.ref }}
   cancel-in-progress: true
 
+# The repository's default token is read-only, so the release-publishing step
+# has to ask for write access explicitly. Everything else only needs read.
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   build:
     name: Android build
@@ -210,9 +216,27 @@ jobs:
           path: out/*
           if-no-files-found: error
 
+      # The shared workflow token cannot create releases on a repo whose
+      # default permissions are read-only, so the one step that needs to write
+      # uses the maintainer's token when it is available.
+      - name: Check release token
+        id: token
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          REL_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -n "$REL_TOKEN" ]; then
+            echo "using maintainer token for the release"
+            echo "token=$REL_TOKEN" >> "$GITHUB_OUTPUT"
+          else
+            echo "no RELEASE_TOKEN secret; release will use the default token"
+            echo "token=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: out/*
           generate_release_notes: true
+          token: ${{ steps.token.outputs.token || github.token }}
