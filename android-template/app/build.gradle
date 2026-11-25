@@ -17,17 +17,44 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // ------------------------------------------------------------------
+    // Release signing
+    //
+    // Credentials are looked for in three places, in order:
+    //   1. CI: environment variables (KEYSTORE_PATH / KEYSTORE_PASSWORD /
+    //      KEY_ALIAS / KEY_PASSWORD), injected from repository secrets.
+    //   2. Local: keystore.properties next to the keystore, written by
+    //      tools/gen_keystore.js. Never committed (see .gitignore).
+    //   3. Neither: fall back to the debug key so `assembleRelease` still
+    //      produces something installable for testers.
+    // ------------------------------------------------------------------
+    def keystoreProps = new Properties()
+    def keystorePropsFile = rootProject.file("../keystore.properties")
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.withInputStream { keystoreProps.load(it) }
+    }
+
+    def signingStorePath = System.getenv("KEYSTORE_PATH") ?: keystoreProps.getProperty("storeFile")
+    if (signingStorePath && !new File(signingStorePath).isAbsolute()) {
+        signingStorePath = rootProject.file("../" + signingStorePath).absolutePath
+    }
+    def signingStorePassword = System.getenv("KEYSTORE_PASSWORD") ?: keystoreProps.getProperty("storePassword")
+    def signingKeyAlias = System.getenv("KEY_ALIAS") ?: keystoreProps.getProperty("keyAlias")
+    def signingKeyPassword = System.getenv("KEY_PASSWORD") ?: keystoreProps.getProperty("keyPassword")
+
+    def hasReleaseKey = signingStorePath && new File(signingStorePath).exists() &&
+                        signingStorePassword && signingKeyAlias
+
     signingConfigs {
         release {
-            // Populated by CI when KEYSTORE_BASE64 / passwords are configured.
-            // When absent, release builds fall back to the debug key so the
-            // artifact is always installable for testers.
-            def storePath = System.getenv("KEYSTORE_PATH")
-            if (storePath && file(storePath).exists()) {
-                storeFile file(storePath)
-                storePassword System.getenv("KEYSTORE_PASSWORD")
-                keyAlias System.getenv("KEY_ALIAS")
-                keyPassword System.getenv("KEY_PASSWORD")
+            if (hasReleaseKey) {
+                storeFile new File(signingStorePath)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+                // v1 + v2 + v3: v1 keeps Android 5/6 (minSdk 22) happy.
+                enableV1Signing true
+                enableV2Signing true
             }
         }
     }
@@ -36,7 +63,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (System.getenv("KEYSTORE_PATH")) {
+            if (hasReleaseKey) {
                 signingConfig signingConfigs.release
             } else {
                 signingConfig signingConfigs.debug

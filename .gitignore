@@ -22,3 +22,9 @@ __pycache__/
 .idea/
 .vscode/
 *.swp
+
+# signing material — committed deliberately for this project so CI and local
+# builds share one stable app identity. See SECURITY note in README.
+# (Uncomment the two lines below to keep it local-only instead.)
+# release.jks
+# keystore.properties

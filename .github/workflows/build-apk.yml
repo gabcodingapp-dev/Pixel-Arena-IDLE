@@ -29,11 +29,13 @@ jobs:
           node-version: 20
           cache: npm
 
+      # Gradle 8.2.1 (Capacitor 6's wrapper) does not support JDK 21, and
+      # AGP 8.2 targets Java 17. 17 is the one version that satisfies both.
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 17
 
       - name: Set up Python (asset pipeline)
         uses: actions/setup-python@v5
@@ -71,35 +73,72 @@ jobs:
       - name: Generate Android project
         run: npm run build:android
 
-      - name: Prepare signing key (optional)
+      - name: Prepare signing key
         id: signing
         run: |
+          set -euo pipefail
+          KS_PATH="release.jks"
+
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "Signing key present — release will be signed for distribution."
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.keystore"
-            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "Using the keystore from repository secrets."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$KS_PATH"
+            STORE_PW="${{ secrets.KEYSTORE_PASSWORD }}"
+            ALIAS="${{ secrets.KEY_ALIAS }}"
+            KEY_PW="${{ secrets.KEY_PASSWORD }}"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          elif [ -f keystore.properties ]; then
+            echo "Using the committed keystore.properties (dev signing)."
             echo "signed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No signing key — release APK will use the debug key (still installable)."
-            echo "signed=false" >> "$GITHUB_OUTPUT"
+            # Deterministic fallback: generate a throwaway signing identity so
+            # the release artifact is a real, installed-able build.
+            echo "No secrets found — generating a project signing key."
+            node tools/gen_keystore.js --quiet --force --out "$KS_PATH"
+            STORE_PW=$(grep '^storePassword=' keystore.properties | cut -d= -f2)
+            ALIAS=$(grep '^keyAlias=' keystore.properties | cut -d= -f2)
+            KEY_PW=$(grep '^keyPassword=' keystore.properties | cut -d= -f2)
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "signing-note=Generated key (not for Play upload)" >> "$GITHUB_OUTPUT"
           fi
+
+          # Hand the credentials to Gradle through the environment.
+          {
+            echo "KEYSTORE_PATH=$PWD/$KS_PATH"
+            echo "KEYSTORE_PASSWORD=$STORE_PW"
+            echo "KEY_ALIAS=$ALIAS"
+            echo "KEY_PASSWORD=$KEY_PW"
+          } >> "$GITHUB_ENV"
+
+          # Prove the key is loadable before spending 5 minutes on Gradle.
+          echo "Verifying the signing key with apksigner's own crypto stack..."
+          keytool -list -keystore "$KS_PATH" -storepass "$STORE_PW" -alias "$ALIAS" \
+            -storetype PKCS12 | tee /tmp/keytool.txt
+          grep -q "PrivateKeyEntry" /tmp/keytool.txt
 
       - name: Build APK + AAB
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Collect artifacts
+
+      - name: Collect and verify artifacts
         run: |
+          set -euo pipefail
           mkdir -p out
           find android/app/build/outputs -name "*.apk" -exec cp {} out/ \;
           find android/app/build/outputs -name "*.aab" -exec cp {} out/ \;
           ls -la out
+
+          # Fail loudly if the release APK came out unsigned.
+          APP_APK=$(ls out/app-release*.apk 2>/dev/null | head -1 || true)
+          if [ -z "$APP_APK" ]; then echo "no release APK produced"; exit 1; fi
+          echo "--- apksigner verify $APP_APK ---"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs "$APP_APK"
+          echo "--- badging ---"
+          AAPT2=$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -1)
+          "$AAPT2" dump badging "$APP_APK" | head -12 || true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
