@@ -51,10 +51,11 @@ jobs:
           python -m pip install --quiet pillow numpy scipy
           python tools/build_assets.py
 
-      - name: Headless game smoke test
-        run: |
-          npm install --no-save jsdom @napi-rs/canvas
-          node tools/harness.js
+      - name: Game logic tests
+        run: node tools/simtest.js
+
+      - name: Headless render smoke test
+        run: node tools/harness.js
 
       - name: Upload screenshots
         if: always()

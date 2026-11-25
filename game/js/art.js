@@ -424,7 +424,7 @@
   /* Where the interactive meadow starts (fraction of canvas height).
      Shared by the backdrop painter and the plot layout so crops always
      land on empty grass instead of over the cottage. */
-  A.fieldFrac = function (landscape) { return landscape ? 0.50 : 0.50; };
+  A.fieldFrac = function (landscape) { return landscape ? 0.58 : 0.50; };
   /* Battle ground line: where the painted clearing starts, and where fighters
      stand. Both the art and the battle system read these, so sprites always
      sit on the floor instead of hovering above it. */
@@ -474,7 +474,7 @@
       }
     } else {
       // No art: paint a complete sky so the scene still reads.
-      var horizon = Math.round(H * (landscape ? 0.42 : 0.34));
+      var horizon = Math.round(H * (landscape ? 0.36 : 0.34));
       var g = ctx.createLinearGradient(0, 0, 0, horizon);
       g.addColorStop(0, "#7fc9f2");
       g.addColorStop(1, "#cdeeff");
@@ -493,8 +493,8 @@
       drawPath(ctx, W, H, horizon, 7);
       drawTree(ctx, W * 0.07, horizon + (H - horizon) * 0.2, (H - horizon) * 0.7, 11);
       drawTree(ctx, W * 0.94, horizon + (H - horizon) * 0.2, (H - horizon) * 0.66, 12);
-      drawCottage(ctx, W * 0.30, horizon + (H - horizon) * 0.18, W * 0.26);
-      drawWell(ctx, W * 0.80, horizon + (H - horizon) * 0.24, W * 0.06);
+      drawCottage(ctx, W * 0.30, horizon + (H - horizon) * 0.20, W * (landscape ? 0.20 : 0.26));
+      drawWell(ctx, W * 0.82, horizon + (H - horizon) * 0.26, W * (landscape ? 0.045 : 0.06));
     }
 
     drawFarmEdgeProps(ctx, W, H, fieldTop);
@@ -513,8 +513,9 @@
     var y = Math.round(fieldTop + fh * 0.05);
     drawFence(ctx, 0, W * 0.13, y, Math.max(8, fh * 0.10));
     drawFence(ctx, W * 0.88, W, y, Math.max(8, fh * 0.10));
-    drawBush(ctx, W * 0.03, H * 0.975, W * 0.09, fh * 0.11, 21);
-    drawBush(ctx, W * 0.97, H * 0.975, W * 0.10, fh * 0.10, 22);
+    var bushH = Math.min(fh * 0.16, H * 0.10);
+    drawBush(ctx, W * 0.04, H - bushH * 0.15, Math.min(W * 0.09, bushH * 2.4), bushH, 21);
+    drawBush(ctx, W * 0.96, H - bushH * 0.15, Math.min(W * 0.10, bushH * 2.6), bushH, 22);
   }
 
   /* ------------------------------------------------------------
